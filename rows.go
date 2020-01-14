@@ -19,6 +19,7 @@ type resultSet struct {
 	columns     []mysqlField
 	columnNames []string
 	done        bool
+	lasterr     error
 }
 
 type mysqlRows struct {
@@ -117,9 +118,10 @@ func (rows *mysqlRows) Close() (err error) {
 	// by the time the user calls `(*Rows).Close`, so we won't reach this
 	// see: https://github.com/golang/go/commit/651ddbdb5056ded455f47f9c494c67b389622a47
 	mc.buf.flip()
-
+	// check nextResult error
+	err = rows.rs.lasterr
 	// Remove unread packets from stream
-	if !rows.rs.done {
+	if err == nil && !rows.rs.done {
 		err = mc.readUntilEOF()
 	}
 	if err == nil {
@@ -179,13 +181,14 @@ func (rows *mysqlRows) nextNotEmptyResultSet() (int, error) {
 }
 
 func (rows *binaryRows) NextResultSet() error {
-	resLen, err := rows.nextNotEmptyResultSet()
-	if err != nil {
-		return err
+	var resLen int
+	resLen, rows.rs.lasterr = rows.nextNotEmptyResultSet()
+	if rows.rs.lasterr != nil {
+		return rows.rs.lasterr
 	}
 
-	rows.rs.columns, err = rows.mc.readColumns(resLen)
-	return err
+	rows.rs.columns, rows.rs.lasterr = rows.mc.readColumns(resLen)
+	return rows.rs.lasterr
 }
 
 func (rows *binaryRows) Next(dest []driver.Value) error {
@@ -201,13 +204,15 @@ func (rows *binaryRows) Next(dest []driver.Value) error {
 }
 
 func (rows *textRows) NextResultSet() (err error) {
-	resLen, err := rows.nextNotEmptyResultSet()
-	if err != nil {
-		return err
+	var resLen int
+	resLen, rows.rs.lasterr = rows.nextNotEmptyResultSet()
+	if rows.rs.lasterr != nil {
+		return rows.rs.lasterr
 	}
 
-	rows.rs.columns, err = rows.mc.readColumns(resLen)
-	return err
+	rows.rs.columns, rows.rs.lasterr = rows.mc.readColumns(resLen)
+	return rows.rs.lasterr
+
 }
 
 func (rows *textRows) Next(dest []driver.Value) error {
