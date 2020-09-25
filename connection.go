@@ -490,7 +490,7 @@ func (mc *mysqlConn) BeginTx(ctx context.Context, opts driver.TxOptions) (driver
 		if err != nil {
 			return nil, err
 		}
-		err = mc.exec("SET TRANSACTION ISOLATION LEVEL " + level)
+		err = mc.exec("SET SESSION TRANSACTION ISOLATION LEVEL " + level)
 		if err != nil {
 			return nil, err
 		}
